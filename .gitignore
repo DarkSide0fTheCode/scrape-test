@@ -1,0 +1,19 @@
+# Ignore node modules
+node_modules/
+
+# Ignore logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Ignore the npm build directory
+dist/
+
+# Ignore the .npm directory where miscellaneous npm files are stored
+.npm/
+
+# Ignore the .nyc_output directory where nyc (Istanbul) coverage reports are stored
+.nyc_output/
+
+# Ignore the coverage directory where coverage reports are stored
+coverage/
