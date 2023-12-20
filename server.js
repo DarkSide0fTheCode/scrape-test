@@ -1,5 +1,6 @@
 const express = require('express');
 const puppeteer = require('puppeteer');
+const sanitizeHtml = require('sanitize-html');
 
 const app = express();
 const PORT = 3000;
@@ -20,6 +21,9 @@ app.get('/extract', async (req, res) => {
     // Replace this with your specific logic to extract article content
     const articleContent = await page.$eval('article', (element) => element.innerHTML.trim());
 
+    // Sanitize the article content
+    const sanitizedArticleContent = sanitizeHtml(articleContent);
+
     await browser.close();
 
     // Format the output
@@ -27,7 +31,7 @@ app.get('/extract', async (req, res) => {
       success: true,
       data: {
         url,
-        articleContent,
+        articleContent: sanitizedArticleContent,
       },
       message: 'Article extraction successful',
     };
