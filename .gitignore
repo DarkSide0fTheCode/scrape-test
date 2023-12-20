@@ -17,3 +17,7 @@ dist/
 
 # Ignore the coverage directory where coverage reports are stored
 coverage/
+
+# Ignore package-lock files
+package.json
+package-lock.json
