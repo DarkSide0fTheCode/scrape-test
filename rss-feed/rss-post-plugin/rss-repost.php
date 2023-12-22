@@ -14,8 +14,12 @@ function angiolino($url, $parserId) {
     // Prepare the URL for the GET request
     $request_url = 'http://87.17.176.223:3000/extract?url=' . urlencode($url);
 
+    print_r($request_url);
+
     // Make the GET request
     $response = wp_remote_get($request_url);
+
+    print_r($response);
 
     // Check for errors
     if (is_wp_error($response)) {
