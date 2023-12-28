@@ -13,20 +13,22 @@ require_once(ABSPATH . 'wp-admin/includes/image.php');
 
 
 
-function echo_log( $what )
+function echo_log($what)
 {
-    echo '<pre>'.print_r( $what, true ).'</pre>';
+    echo '<pre>' . print_r($what, true) . '</pre>';
 }
 
 // Function to add a new menu item in the WordPress admin dashboard
-function my_admin_menu() {
+function my_admin_menu()
+{
     // add_menu_page function adds a new top-level menu to the WordPress admin interface
     // Parameters are: page title, menu title, capability, menu slug, function to display the page content
     add_menu_page('MalibúTech RSS', 'MalibúTech RSS', 'manage_options', 'malibutech_feed', 'malibutech_feed_callback');
 }
 
 // Function to display the content of the custom admin page
-function malibutech_feed_callback() {
+function malibutech_feed_callback()
+{
     // Start of the page content
     echo '<div class="wrap">';
     // Instructions for the user
@@ -51,7 +53,34 @@ function malibutech_feed_callback() {
     }
 }
 
-function angiolino($url, $parserId) {
+
+function remove_non_paragraph_elements($article_content) {
+    $dom = new DOMDocument;
+
+    // Load the HTML into the DOMDocument instance
+    // The @ before the method call suppresses any warnings that
+    // loadHTML might throw because of invalid HTML in the input
+    @$dom->loadHTML($article_content, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+
+    // Create a new DOMXPath instance
+    $xpath = new DOMXPath($dom);
+
+    // Query all elements that are not <p>
+    $nodes = $xpath->query("//*[not(self::p)]");
+
+    // Remove each node from its parent
+    foreach ($nodes as $node) {
+        $node->parentNode->removeChild($node);
+    }
+
+    // Save the updated HTML
+    $article_content = $dom->saveHTML();
+
+    return $article_content;
+}
+
+function angiolino($url, $parserId)
+{
     // Prepare the URL for the GET request
     echo_log("Preparing to fetch: " . $url . "\n");
     $request_url = 'http://87.17.176.223:3000/extract?url=' . urlencode($url);
@@ -73,7 +102,7 @@ function angiolino($url, $parserId) {
 
     // Get the body of the response
     echo_log("Preparing to retrieve body \n");
-    
+
     $body = wp_remote_retrieve_body($response);
 
     echo_log("Body retrieved! \n");
@@ -90,7 +119,7 @@ function angiolino($url, $parserId) {
     if ($data['success']) {
         // The article content should be in the 'data' field
         $article_content = $data['data']['articleContent'];
-
+        $cleaned_content = remove_non_paragraph_elements($article_content);
         // Return the article content
         return $article_content;
     } else {
@@ -101,14 +130,17 @@ function angiolino($url, $parserId) {
 }
 
 // Create a function to fetch and process RSS feed items
-function fetch_rss_feed_and_post_to_blog() {
+function fetch_rss_feed_and_post_to_blog()
+{
     // Define the RSS feed URLs as an associative array with URL, corresponding image URL, and tags
     $rss_feed_urls = array(
         'https://www.orizzontescuola.it/feed/' => array(
             'image_url' => 'https://img.freepik.com/free-photo/students-knowing-right-answer_329181-14271.jpg?w=996&t=st=1703699259~exp=1703699859~hmac=f226ad29a042afc6e3a7142709dfc47c05bdcd2bec12972541fc9a35c70dd7b0',
             'tags' => array('test-scuola', 'test-school'), // Add specific tags for this URL
-            'category' => 120,
-            'parserId' => '.entry-content'
+            'category' => "Notizie",
+            'parserId' => '.entry-content',
+            'post_author' => 2, // Set the author
+
         ),
         // Add more URLs, image URLs, and tags as needed
     );
@@ -119,6 +151,7 @@ function fetch_rss_feed_and_post_to_blog() {
         $image_url = $data['image_url'];
         $post_tags = $data['tags'];
         $post_category = $data['category'];
+        $post_author = $data['post_author'];
 
         // Fetch the RSS feed
         $rss = fetch_feed($rss_feed_url);
@@ -134,7 +167,8 @@ function fetch_rss_feed_and_post_to_blog() {
                 $post_title = $item->get_title();
                 // $post_content = $item->get_content(); 
                 $post_date = $item->get_date('Y-m-d H:i:s');
-                $post_link = $item->get_permalink();                
+                $post_link = $item->get_permalink();
+
 
                 // Extracting image if available in the feed item
                 $post_image = ''; // Initialize the variable for the image URL
@@ -149,28 +183,48 @@ function fetch_rss_feed_and_post_to_blog() {
                 }
 
                 $articleContent = angiolino($post_link, $data['parserId']);
-                
-                // Custom tags to be inserted into the post content
-                $custom_tags = '<p>' . implode('</p><p>', $post_tags) . '</p>';
+
 
                 // Create a new post
                 $new_post = array(
-                    'post_title'    => $post_title,
-                    'post_content'  => $articleContent, // Add custom tags to the content
-                    'post_date'     => $post_date,
-                    'post_type'     => 'post',
-                    'post_status'   => 'publish'
+                    'post_title' => $post_title,
+                    'post_content' => $articleContent, // Add custom tags to the content
+                    'post_date' => $post_date,
+                    'post_type' => 'post',
+                    'post_status' => 'publish',
+                    'post_author' => $post_author // Set the author
+
                 );
 
                 // Insert the post into the database
                 $post_id = wp_insert_post($new_post);
-                
+
+                // Set the post as not commentable
+                wp_update_post(array(
+                    'ID' => $post_id,
+                    'comment_status' => 'closed',
+                ));
+
                 echo_log("Analizing: " . $post_link . "\n");
                 echo_log("Post ID: " . $post_id . "\n");
-                
 
-                // Assign a specific category to the post
-                wp_set_post_categories($post_id, array($post_category));
+
+                // Check if the category exists
+                $category_exists = term_exists($post_category, 'category');
+
+                if ($category_exists == 0 || $category_exists == null) {
+                    // Category doesn't exist, create a new one
+                    $new_category_id = wp_insert_category(array('cat_name' => $post_category));
+                    // Assign the new category to the post
+                    wp_set_post_categories($post_id, array($new_category_id));
+                } else {
+                    // Category exists, assign it to the post
+                    wp_set_post_categories($post_id, array($category_exists['term_id']));
+                }
+
+                // Set the tags for the post
+                wp_set_post_tags($post_id, $post_tags, false);
+
 
                 // If an image was found in the feed item, set it as the post's featured image
                 if ($post_image !== '') {
@@ -199,13 +253,15 @@ function fetch_rss_feed_and_post_to_blog() {
                     }
                 }
 
+
             }
         }
     }
 }
 
 // Schedule the function to run at regular intervals
-function schedule_fetch_rss_feed() {
+function schedule_fetch_rss_feed()
+{
     if (!wp_next_scheduled('fetch_rss_feed_event')) {
         wp_schedule_event(time(), 'hourly', 'fetch_rss_feed_event');
     }
