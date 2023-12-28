@@ -10,16 +10,59 @@ require_once(ABSPATH . 'wp-admin/includes/media.php');
 require_once(ABSPATH . 'wp-admin/includes/file.php');
 require_once(ABSPATH . 'wp-admin/includes/image.php');
 
+
+
+
+function echo_log( $what )
+{
+    echo '<pre>'.print_r( $what, true ).'</pre>';
+}
+
+// Function to add a new menu item in the WordPress admin dashboard
+function my_admin_menu() {
+    // add_menu_page function adds a new top-level menu to the WordPress admin interface
+    // Parameters are: page title, menu title, capability, menu slug, function to display the page content
+    add_menu_page('MalibúTech RSS', 'MalibúTech RSS', 'manage_options', 'malibutech_feed', 'malibutech_feed_callback');
+}
+
+// Function to display the content of the custom admin page
+function malibutech_feed_callback() {
+    // Start of the page content
+    echo '<div class="wrap">';
+    // Instructions for the user
+    echo '<p>Clicca il bottone per scaricare le news.</p>';
+    // Start of the form
+    echo '<form method="POST">';
+    // Hidden input field to indicate that the RSS feed should be fetched when the form is submitted
+    echo '<input type="hidden" name="fetch_rss_feed" value="1">';
+    // Submit button
+    echo '<input type="submit" value="Scarica News dai Feed RSS">';
+    // End of the form
+    echo '</form>';
+    // End of the page content
+    echo '</div>';
+
+    // Check if the form has been submitted
+    if (isset($_POST['fetch_rss_feed'])) {
+        // Call the function to fetch the RSS feed and post to blog
+        fetch_rss_feed_and_post_to_blog();
+        // Display a message to indicate that the RSS feed has been fetched and posted to blog
+        echo '<p>News scaricate dai Feed RSS e postate sul blog.</p>';
+    }
+}
+
 function angiolino($url, $parserId) {
     // Prepare the URL for the GET request
+    echo_log("Preparing to fetch: " . $url . "\n");
     $request_url = 'http://87.17.176.223:3000/extract?url=' . urlencode($url);
+    echo_log("\n");
 
-    print_r($request_url);
+    // echo_log($request_url);
 
     // Make the GET request
     $response = wp_remote_get($request_url);
 
-    print_r($response);
+    // echo_log($response);
 
     // Check for errors
     if (is_wp_error($response)) {
@@ -29,10 +72,19 @@ function angiolino($url, $parserId) {
     }
 
     // Get the body of the response
+    echo_log("Preparing to retrieve body \n");
+    
     $body = wp_remote_retrieve_body($response);
 
+    echo_log("Body retrieved! \n");
+
     // The body should be a JSON string, so decode it into an array
+    echo_log("Preparing to retrieve data \n");
+
     $data = json_decode($body, true);
+
+    echo_log("data retrieved! \n");
+
 
     // Check if the request was successful
     if ($data['success']) {
@@ -53,9 +105,9 @@ function fetch_rss_feed_and_post_to_blog() {
     // Define the RSS feed URLs as an associative array with URL, corresponding image URL, and tags
     $rss_feed_urls = array(
         'https://www.orizzontescuola.it/feed/' => array(
-            'image_url' => 'https://www.orizzontescuola.it/wp-content/uploads/2020/12/Classe-1536x1152.jpeg',
+            'image_url' => 'https://img.freepik.com/free-photo/students-knowing-right-answer_329181-14271.jpg?w=996&t=st=1703699259~exp=1703699859~hmac=f226ad29a042afc6e3a7142709dfc47c05bdcd2bec12972541fc9a35c70dd7b0',
             'tags' => array('test-scuola', 'test-school'), // Add specific tags for this URL
-            'category' => 3,
+            'category' => 120,
             'parserId' => '.entry-content'
         ),
         // Add more URLs, image URLs, and tags as needed
@@ -64,6 +116,7 @@ function fetch_rss_feed_and_post_to_blog() {
     // Loop through each RSS feed URL, its associated image URL, and tags
     foreach ($rss_feed_urls as $rss_feed_url => $data) {
         $post_image = $data['image_url'];
+        $image_url = $data['image_url'];
         $post_tags = $data['tags'];
         $post_category = $data['category'];
 
@@ -112,12 +165,16 @@ function fetch_rss_feed_and_post_to_blog() {
                 // Insert the post into the database
                 $post_id = wp_insert_post($new_post);
                 
+                echo_log("Analizing: " . $post_link . "\n");
+                echo_log("Post ID: " . $post_id . "\n");
+                
+
                 // Assign a specific category to the post
                 wp_set_post_categories($post_id, array($post_category));
 
                 // If an image was found in the feed item, set it as the post's featured image
                 if ($post_image !== '') {
-                    print_r("Image found in RSS\n");
+                    echo_log("Image found in RSS\n");
                     $image = media_sideload_image($post_image, $post_id, $post_title);
                     if (!is_wp_error($image)) {
                         $image_url = wp_get_attachment_image_src($image, 'full');
@@ -125,14 +182,20 @@ function fetch_rss_feed_and_post_to_blog() {
                     }
                 } else {
                     // Set a default image as the post's featured image
-                    print_r("Image not found in RSS - using default image \n");
-                    print_r($data['image_url']);
-                    $image = media_sideload_image($data['image_url'], $post_id, 'Default Image RSS Made');
-                    if (!is_wp_error($image)) {
-                        print_r("Dio \n");
-                        print_r($image);
-                        $image_url = wp_get_attachment_image_src($image, 'full');
-                        set_post_thumbnail($post_id, $image_url[0]);
+                    echo_log("Image not found in RSS - using default image \n");
+                    echo_log($image_url);
+                    echo_log("\n");
+                    $media = media_sideload_image($image_url, $post_id, $desc = "Test image", $return = 'id');
+                    $media_2 = media_sideload_image($image_url, $post_id, $desc = "Test image 2");
+                    echo_log($media);
+                    echo_log("\n");
+                    echo_log($media_2);
+                    echo_log("\n");
+                    echo_log(is_wp_error($media));
+                    echo_log("\n");
+
+                    if (!is_wp_error($media)) {
+                        set_post_thumbnail($post_id, $media);
                     }
                 }
 
@@ -148,6 +211,6 @@ function schedule_fetch_rss_feed() {
     }
 }
 add_action('wp', 'schedule_fetch_rss_feed');
-
-// Hook the fetch_rss_feed_and_post_to_blog function to the scheduled event
 add_action('fetch_rss_feed_event', 'fetch_rss_feed_and_post_to_blog');
+add_action('admin_menu', 'my_admin_menu');
+
