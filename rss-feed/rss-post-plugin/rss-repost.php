@@ -18,7 +18,8 @@ function echo_log($what)
     echo '<pre>' . print_r($what, true) . '</pre>';
 }
 
-function get_channel_link($rss_data) {
+function get_channel_link($rss_data)
+{
     // Load the RSS data into a SimpleXMLElement
     $rss = new SimpleXMLElement($rss_data);
 
@@ -29,7 +30,7 @@ function get_channel_link($rss_data) {
     $link = $channel->link;
 
     // Return the link as a string
-    return (string)$link;
+    return (string) $link;
 }
 
 function delete_all_articles()
@@ -179,12 +180,9 @@ function fetch_rss_feed_and_post_to_blog()
             'post_author' => 2, // Set the author
 
         ),
-        
-
-        // Add more URLs, image URLs, and tags as needed
     );
 
-    
+
 
     // Loop through each RSS feed URL, its associated image URL, and tags
     foreach ($rss_feed_urls as $rss_feed_url => $data) {
@@ -193,14 +191,14 @@ function fetch_rss_feed_and_post_to_blog()
         $post_tags = $data['tags'];
         $post_category = $data['category'];
         $post_author = $data['post_author'];
-        
+
         // Fetch the RSS feed
-        
+
         $rss = fetch_feed($rss_feed_url);
-        
+
         if (!is_wp_error($rss)) {
             $website_link = $rss->get_base();
-    
+
             // Get the RSS feed items
             $max_items = $rss->get_item_quantity(10); // Change 10 to the number of items you want to fetch
             $rss_items = $rss->get_items(0, $max_items);
@@ -276,11 +274,44 @@ function fetch_rss_feed_and_post_to_blog()
                 // If an image was found in the feed item, set it as the post's featured image
                 if ($post_image !== '') {
                     echo_log("Image found in RSS\n");
-                    $image = media_sideload_image($post_image, $post_id, $post_title);
-                    if (!is_wp_error($image)) {
-                        $image_url = wp_get_attachment_image_src($image, 'full');
-                        set_post_thumbnail($post_id, $image_url[0]);
+
+                    $filename = basename($post_image);
+
+                    // Check if the image already exists in the media library
+                    $query_images_args = array(
+                        'post_type' => 'attachment',
+                        'post_mime_type' => 'image',
+                        'post_status' => 'inherit',
+                        'posts_per_page' => -1,
+                        'meta_query' => array(
+                            array(
+                                'key' => '_wp_attached_file',
+                                'value' => $filename,
+                                'compare' => 'LIKE',
+                            ),
+                        ),
+                    );
+
+                    $query_images = new WP_Query($query_images_args);
+
+                    if ($query_images->posts) {
+                        // The image already exists in the media library, so use it
+                        echo_log("Image found in media library - using it \n");
+                        $image_id = $query_images->posts[0]->ID;
+                    } else {
+                        // The image does not exist in the media library, so upload it
+                        echo_log("Image not found in media library - uploading \n");
+                        $image = media_sideload_image($post_image, $post_id, $post_title, 'id');
+                        if (!is_wp_error($image)) {
+                            $image_id = $image;
+                        }
                     }
+
+                    // Set the image as the post's featured image
+                    if (isset($image_id)) {
+                        set_post_thumbnail($post_id, $image_id);
+                    }
+
                 } else {
                     // Set a default image as the post's featured image
                     echo_log("Image not found in RSS - using default image \n");
