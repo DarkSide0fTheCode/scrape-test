@@ -18,6 +18,37 @@ function echo_log($what)
     echo '<pre>' . print_r($what, true) . '</pre>';
 }
 
+function get_channel_link($rss_data) {
+    // Load the RSS data into a SimpleXMLElement
+    $rss = new SimpleXMLElement($rss_data);
+
+    // Get the <channel> element
+    $channel = $rss->channel;
+
+    // Get the <link> element inside the <channel>
+    $link = $channel->link;
+
+    // Return the link as a string
+    return (string)$link;
+}
+
+function delete_all_articles()
+{
+    $args = array(
+        'post_type' => 'post',
+        'post_status' => 'publish',
+        'numberposts' => -1
+    );
+
+    $all_posts = get_posts($args);
+
+    foreach ($all_posts as $post) {
+        wp_delete_post($post->ID, true);
+    }
+
+    echo '<p>All articles have been deleted.</p>';
+}
+
 // Function to add a new menu item in the WordPress admin dashboard
 function my_admin_menu()
 {
@@ -34,11 +65,10 @@ function malibutech_feed_callback()
     // Instructions for the user
     echo '<p>Clicca il bottone per scaricare le news.</p>';
     // Start of the form
-    echo '<form method="POST">';
-    // Hidden input field to indicate that the RSS feed should be fetched when the form is submitted
-    echo '<input type="hidden" name="fetch_rss_feed" value="1">';
+    echo '<form method="POST" style="display: flex; flex-direction: column;">';
     // Submit button
-    echo '<input type="submit" value="Scarica News dai Feed RSS">';
+    echo '<input type="submit" name="fetch_rss_feed" value="Scarica News dai Feed RSS">';
+    echo '<input type="submit" name="delete_all_articles" value="Elimina articoli">';
     // End of the form
     echo '</form>';
     // End of the page content
@@ -51,32 +81,35 @@ function malibutech_feed_callback()
         // Display a message to indicate that the RSS feed has been fetched and posted to blog
         echo '<p>News scaricate dai Feed RSS e postate sul blog.</p>';
     }
+
+    if (isset($_POST['delete_all_articles'])) {
+        delete_all_articles();
+    }
 }
 
 
-function remove_non_paragraph_elements($article_content) {
+function remove_non_paragraph_elements($article_content)
+{
     $dom = new DOMDocument;
 
     // Load the HTML into the DOMDocument instance
-    // The @ before the method call suppresses any warnings that
-    // loadHTML might throw because of invalid HTML in the input
     @$dom->loadHTML($article_content, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
 
     // Create a new DOMXPath instance
     $xpath = new DOMXPath($dom);
 
-    // Query all elements that are not <p>
-    $nodes = $xpath->query("//*[not(self::p)]");
+    // Query all <p> elements
+    $nodes = $xpath->query("//div/p");
 
-    // Remove each node from its parent
+    // Initialize an empty string to hold the new HTML
+    $new_html = '';
+
+    // Append each <p> element and its inner HTML to the new HTML string
     foreach ($nodes as $node) {
-        $node->parentNode->removeChild($node);
+        $new_html .= $dom->saveHTML($node) . "\n";
     }
 
-    // Save the updated HTML
-    $article_content = $dom->saveHTML();
-
-    return $article_content;
+    return $new_html;
 }
 
 function angiolino($url, $parserId)
@@ -89,8 +122,7 @@ function angiolino($url, $parserId)
     // echo_log($request_url);
 
     // Make the GET request
-    $response = wp_remote_get($request_url);
-
+    $response = wp_remote_get($request_url, array('timeout' => 15));
     // echo_log($response);
 
     // Check for errors
@@ -119,9 +151,14 @@ function angiolino($url, $parserId)
     if ($data['success']) {
         // The article content should be in the 'data' field
         $article_content = $data['data']['articleContent'];
+        echo_log("Type of article_content: " . gettype($article_content) . "\n");
+        echo_log("article_content: \n" . $article_content . "\n");
+        $article_content = mb_convert_encoding($article_content, 'HTML-ENTITIES', 'UTF-8');
         $cleaned_content = remove_non_paragraph_elements($article_content);
+
+        // echo_log("cleaned_content: \n" . $cleaned_content . "\n");
         // Return the article content
-        return $article_content;
+        return $cleaned_content;
     } else {
         // Handle the error
         echo "Error: " . $data['error']['message'];
@@ -142,8 +179,12 @@ function fetch_rss_feed_and_post_to_blog()
             'post_author' => 2, // Set the author
 
         ),
+        
+
         // Add more URLs, image URLs, and tags as needed
     );
+
+    
 
     // Loop through each RSS feed URL, its associated image URL, and tags
     foreach ($rss_feed_urls as $rss_feed_url => $data) {
@@ -152,14 +193,19 @@ function fetch_rss_feed_and_post_to_blog()
         $post_tags = $data['tags'];
         $post_category = $data['category'];
         $post_author = $data['post_author'];
-
+        
         // Fetch the RSS feed
+        
         $rss = fetch_feed($rss_feed_url);
-
+        
         if (!is_wp_error($rss)) {
+            $website_link = $rss->get_base();
+    
             // Get the RSS feed items
             $max_items = $rss->get_item_quantity(10); // Change 10 to the number of items you want to fetch
             $rss_items = $rss->get_items(0, $max_items);
+
+
 
             // Loop through each feed item
             foreach ($rss_items as $item) {
@@ -184,6 +230,7 @@ function fetch_rss_feed_and_post_to_blog()
 
                 $articleContent = angiolino($post_link, $data['parserId']);
 
+                $articleContent .= '<p>Fonte: ' . $website_link . '</p';
 
                 // Create a new post
                 $new_post = array(
@@ -270,3 +317,4 @@ add_action('wp', 'schedule_fetch_rss_feed');
 add_action('fetch_rss_feed_event', 'fetch_rss_feed_and_post_to_blog');
 add_action('admin_menu', 'my_admin_menu');
 
+// $salve = "<div>\n<div></div>\n<header>\n<div>\n<span>\n<a href=\"https://www.orizzontescuola.it/ata/\">ATA</a> </span>\n<span>\n<a href=\"https://www.orizzontescuola.it/proroga-contratti-ata-5-739-collaboratori-scolastici-3-166-assistenti-tecnici-e-amministrativi-in-arrivo-le-istruzioni-del-ministero/\"><time>28 Dic 2023 - 15:01</time></a> </span>\n</div>\n<h1>Proroga contratti ATA: 5.739 collaboratori scolastici. 3.166 assistenti tecnici e amministrativi. In arrivo le istruzioni del Ministero</h1> <div>\nDi <span><a href=\"https://www.orizzontescuola.it/author/redazione/\">redazione</a></span> </div>\n</header>\n<div>\n\n<a href=\"https://facebook.com/sharer/sharer.php?u=https://www.orizzontescuola.it/proroga-contratti-ata-5-739-collaboratori-scolastici-3-166-assistenti-tecnici-e-amministrativi-in-arrivo-le-istruzioni-del-ministero/\" target=\"_blank\">\n<div><div>\n</div>Facebook</div>\n</a>\n\n<a href=\"https://twitter.com/intent/tweet/?text=Proroga contratti ATA: 5.739 collaboratori scolastici. 3.166 assistenti tecnici e amministrativi. In arrivo le istruzioni del Ministero&amp;url=https://www.orizzontescuola.it/proroga-contratti-ata-5-739-collaboratori-scolastici-3-166-assistenti-tecnici-e-amministrativi-in-arrivo-le-istruzioni-del-ministero/\" target=\"_blank\">\n<div><div>\n</div>Twitter</div>\n</a>\n\n<a target=\"_blank\">\n<div><div>\n</div>WhatsApp</div>\n</a>\n\n<a href=\"https://t.me/share/url?text=Proroga contratti ATA: 5.739 collaboratori scolastici. 3.166 assistenti tecnici e amministrativi. In arrivo le istruzioni del Ministero&amp;url=https://www.orizzontescuola.it/proroga-contratti-ata-5-739-collaboratori-scolastici-3-166-assistenti-tecnici-e-amministrativi-in-arrivo-le-istruzioni-del-ministero/\" target=\"_blank\">\n<div><div>\n</div>Telegram</div>\n</a>\n\n<a href=\"https://www.printfriendly.com\" target=\"_self\">\n<div><div>\n\n\n\n\n</div>Stampa</div>\n</a>\n\n</div>\n<div></div>\n<div></div>\n<div>\n </div>\n<div></div>\n<div></div>\n<p>Il Ministero ci ha informato che i contratti a tempo determinato per i collaboratori scolastici, per un totale di 5.739 (4320 da PNRR e 1419 da Agenda Sud), e i contratti per gli assistenti amministrativi e tecnici, per un totale di 3.166, saranno prorogati.</p>\n<div></div>\n<div></div>\n<p>Lo scrive la <strong>Uil Scuola Rua</strong>, che dunque comunica i piani in merito alla proroga dei contratti ATA.</p>\n<p>Capitolo <strong>collaboratori scolastici</strong>: per tale personale – scrive il sindacato – il canale di finanziamento è la legge di Bilancio che è ancora in corso di approvazione e che prevede la proroga dei contratti, senza soluzione di continuità, a partire dal 1° gennaio 2024 e sino al <strong>15 aprile 2024</strong> nonostante la funzione SIDI per la proroga dei contratti, sarà disponibile solo dall’8 gennaio 2024.</p>\n<p>Per quanto riguarda gli <strong>assistenti amministrativi e assistenti tecnici</strong>, il canale di finanziamento è il Decreto legge n. 145/2023 convertito in Legge n. 191/2023 con risorse non a carico dello Stato ma previste dal PNRR. In questo caso la norma prevede l’attivazione di nuovi incarichi di personale amministrativo e tecnico secondo il finanziamento stabilito, per cui al momento non c’è una data di scadenza precisa dei contratti come invece è prevista dalla Legge di Bilancio per i collaboratori scolastici. In base a quanto si apprende, in questo caso la proroga dovrebbe essere fino al <strong>30 giugno 2026.</strong></p>\n<p>In giornata, spiega la Uil Scuola Rua, il Ministero invierà alle scuole le istruzioni operative per la corretta stipula dei contratti e metterà a disposizione delle stesse un simulatore per la gestione delle risorse PNRR al fine di calibrare con esattezza la data di termine del contratto per gli assistenti amministrativi e tecnici.</p>\n<blockquote><p><a href=\"https://www.orizzontescuola.it/organico-aggiuntivo-ata-chi-riguarda-la-proroga-al-15-aprile-2024-in-legge-di-bilancio/\">Organico aggiuntivo ATA, chi riguarda la proroga al 15 aprile 2024 in legge di Bilancio?</a></p></blockquote>\n<p></p>\n<p></p>\n<div>\n<div></div>\n<div></div>\n<div>\n\n<a href=\"https://facebook.com/sharer/sharer.php?u=https://www.orizzontescuola.it/proroga-contratti-ata-5-739-collaboratori-scolastici-3-166-assistenti-tecnici-e-amministrativi-in-arrivo-le-istruzioni-del-ministero/\" target=\"_blank\">\n<div><div>\n</div>Facebook</div>\n</a>\n\n<a href=\"https://twitter.com/intent/tweet/?text=Proroga contratti ATA: 5.739 collaboratori scolastici. 3.166 assistenti tecnici e amministrativi. In arrivo le istruzioni del Ministero&amp;url=https://www.orizzontescuola.it/proroga-contratti-ata-5-739-collaboratori-scolastici-3-166-assistenti-tecnici-e-amministrativi-in-arrivo-le-istruzioni-del-ministero/\" target=\"_blank\">\n<div><div>\n</div>Twitter</div>\n</a>\n\n<a target=\"_blank\">\n<div><div>\n</div>WhatsApp</div>\n</a>\n\n<a href=\"https://t.me/share/url?text=Proroga contratti ATA: 5.739 collaboratori scolastici. 3.166 assistenti tecnici e amministrativi. In arrivo le istruzioni del Ministero&amp;url=https://www.orizzontescuola.it/proroga-contratti-ata-5-739-collaboratori-scolastici-3-166-assistenti-tecnici-e-amministrativi-in-arrivo-le-istruzioni-del-ministero/\" target=\"_blank\">\n<div><div>\n</div>Telegram</div>\n</a>\n\n<a href=\"https://www.printfriendly.com\" target=\"_self\">\n<div><div>\n\n\n\n\n</div>Stampa</div>\n</a>\n\n</div>\n<div>\n<h2>Corsi</h2>\n<article>\n<h2><a href=\"https://www.orizzontescuola.it/concorso-straordinario-docenti-6-nuove-lezioni-live-per-superare-la-prova-scritta-analizzeremo-ulteriori-400-quesiti-su-tutti-gli-argomenti-del-test-2-edizione/\">Concorso straordinario docenti, 6 nuove lezioni live per superare la prova scritta. Analizzeremo ulteriori 400 quesiti su tutti gli argomenti del test – 2° edizione</a></h2> </article>\n<article>\n<h2><a href=\"https://www.orizzontescuola.it/pnrr-3-1-steam-scuole-possono-presentare-progetti-innovativi-le-indicazioni-operative-sulle-procedure-amministrative-negoziali-e-contabili-in-un-webinar-giorno-8-gratuito-per-gli-abbonati-plus/\">PNRR 3.1 STEAM, scuole possono presentare progetti innovativi. Le indicazioni operative sulle procedure amministrative, negoziali e contabili in un WEBINAR giorno 8, gratuito per gli abbonati PLUS</a></h2> </article>\n<a href=\"https://www.orizzontescuolaformazione.it/\">Tutti i corsi</a>\n</div>\n<div>\n<h2>Orizzonte Scuola PLUS</h2>\n<article>\n<h2><a href=\"https://www.orizzontescuola.it/gestire-il-personale-scolastico-anno-3-n2-supplenze-personale-docente-tutto-quello-che-ce-da-sapere-con-casi-concreti-per-segreterie-e-docenti/\">Gestire il personale scolastico anno 3 n°2 – Supplenze personale docente: tutto quello che c’è da sapere con casi concreti per segreterie e docenti</a></h2> </article>\n<article>\n<h2><a href=\"https://www.orizzontescuola.it/la-dirigenza-scolastica-anno-3-n4-le-novita-dautunno-circolari-adempimenti-e-scadenze-autunnali-per-scuole-e-dirigenti-scolastici-abbonati-o-acquistala/\">La dirigenza scolastica. Anno 3 n°4 – Le novità d’autunno: circolari, adempimenti e scadenze autunnali per scuole e Dirigenti scolastici. Abbonati o acquistala</a></h2> </article>\n<a href=\"https://plus.orizzontescuola.it/\">Scopri tutti i contenuti PLUS</a>\n</div>\n<div>\n<a href=\"https://www.orizzontescuola.it/content/newsletter\">\n<span>Iscriviti alla newsletter di OrizzonteScuola</span>\n<p>Ricevi ogni sera nella tua casella di posta una e-mail con tutti gli aggiornamenti del network di\norizzontescuola.it</p>\n</a>\n</div>\n<footer>\n<div>\n<span>\nPubblicato in <a href=\"https://www.orizzontescuola.it/ata/\">ATA</a> </span>\n</div>\n</footer>\n<div>\n<div></div>\n<div></div>\n<div></div>\n<div></div>\n</div>\n<div></div>\n<div></div>\n<div></div>\n</div>\n</div>";
