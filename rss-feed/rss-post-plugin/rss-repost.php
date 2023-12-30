@@ -86,6 +86,41 @@ function malibutech_feed_callback()
     if (isset($_POST['delete_all_articles'])) {
         delete_all_articles();
     }
+
+     // Query all attachments
+     $query_images_args = array(
+        'post_type' => 'attachment',
+        'post_mime_type' =>'image',
+        'post_status' => 'inherit',
+        'posts_per_page' => -1,
+    );
+
+    $query_images = new WP_Query($query_images_args);
+
+    // Start the dropdown
+    echo '<select name="image-dropdown" id="image-dropdown" onchange="showImagePreview(this)">';
+
+    // Loop through the attachments and create the dropdown options
+    foreach ($query_images->posts as $image) {
+        echo '<option value="' . wp_get_attachment_url($image->ID) . '">' . $image->post_title . '</option>';
+    }
+
+    // End the dropdown
+    echo '</select>';
+
+    // Add an image element for the preview
+    echo '<img id="image-preview" src="" style="max-width: 200px; display: none;" />';
+
+    // Add the JavaScript code
+    echo '
+    <script type="text/javascript">
+        function showImagePreview(selectElement) {
+            var previewElement = document.getElementById("image-preview");
+            previewElement.src = selectElement.value;
+            previewElement.style.display = "block";
+        }
+    </script>
+    ';
 }
 
 
@@ -277,6 +312,8 @@ function fetch_rss_feed_and_post_to_blog()
 
                     $filename = basename($post_image);
 
+                    echo_log("filename is " . $filename . "\n");
+
                     // Check if the image already exists in the media library
                     $query_images_args = array(
                         'post_type' => 'attachment',
@@ -292,7 +329,11 @@ function fetch_rss_feed_and_post_to_blog()
                         ),
                     );
 
+                    echo_log("query_images_args is " . $query_images_args . "\n");
+
                     $query_images = new WP_Query($query_images_args);
+
+                    echo_log("query_images is " . $query_images . "\n");
 
                     if ($query_images->posts) {
                         // The image already exists in the media library, so use it
@@ -317,17 +358,40 @@ function fetch_rss_feed_and_post_to_blog()
                     echo_log("Image not found in RSS - using default image \n");
                     echo_log($image_url);
                     echo_log("\n");
-                    $media = media_sideload_image($image_url, $post_id, $desc = "Test image", $return = 'id');
-                    $media_2 = media_sideload_image($image_url, $post_id, $desc = "Test image 2");
-                    echo_log($media);
-                    echo_log("\n");
-                    echo_log($media_2);
-                    echo_log("\n");
-                    echo_log(is_wp_error($media));
-                    echo_log("\n");
 
-                    if (!is_wp_error($media)) {
-                        set_post_thumbnail($post_id, $media);
+                    // Check if the image already exists in the media library
+                    // Check if the image already exists in the media library
+                    $query_images_args = array(
+                        'post_type' => 'attachment',
+                        'post_status' => 'inherit',
+                        'posts_per_page' => -1,
+                        'meta_query' => array(
+                            array(
+                                'key' => '_wp_attachment_metadata',
+                                'value' => $image_url,
+                                'compare' => 'LIKE',
+                            ),
+                        ),
+                    );
+
+                    $query_images = new WP_Query($query_images_args);
+
+                    if ($query_images->posts) {
+                        // The image already exists in the media library, so use it
+                        echo_log("Image found in media library - using it \n");
+                        $image_id = $query_images->posts[0]->ID;
+                    } else {
+                        // The image does not exist in the media library, so upload it
+                        echo_log("Image not found in media library - uploading \n");
+                        $media = media_sideload_image($image_url, $post_id, $desc = "Test image", $return = 'id');
+                        if (!is_wp_error($media)) {
+                            $image_id = $media;
+                        }
+                    }
+
+                    // Set the image as the post's featured image
+                    if (isset($image_id)) {
+                        set_post_thumbnail($post_id, $image_id);
                     }
                 }
 
