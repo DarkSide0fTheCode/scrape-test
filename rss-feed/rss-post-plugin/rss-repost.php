@@ -208,7 +208,7 @@ function fetch_rss_feed_and_post_to_blog()
     // Define the RSS feed URLs as an associative array with URL, corresponding image URL, and tags
     $rss_feed_urls = array(
         'https://www.orizzontescuola.it/feed/' => array(
-            'image_url' => 'https://img.freepik.com/free-photo/students-knowing-right-answer_329181-14271.jpg?w=996&t=st=1703699259~exp=1703699859~hmac=f226ad29a042afc6e3a7142709dfc47c05bdcd2bec12972541fc9a35c70dd7b0',
+            'image_title' => 'notizie-default',
             'tags' => array('test-scuola', 'test-school'), // Add specific tags for this URL
             'category' => "Notizie",
             'parserId' => '.entry-content',
@@ -217,12 +217,10 @@ function fetch_rss_feed_and_post_to_blog()
         ),
     );
 
-
-
     // Loop through each RSS feed URL, its associated image URL, and tags
     foreach ($rss_feed_urls as $rss_feed_url => $data) {
-        $post_image = $data['image_url'];
-        $image_url = $data['image_url'];
+        $post_image = $data['image_title'];
+        $image_title = $data['image_title'];
         $post_tags = $data['tags'];
         $post_category = $data['category'];
         $post_author = $data['post_author'];
@@ -356,22 +354,17 @@ function fetch_rss_feed_and_post_to_blog()
                 } else {
                     // Set a default image as the post's featured image
                     echo_log("Image not found in RSS - using default image \n");
-                    echo_log($image_url);
+                    echo_log($image_title);
                     echo_log("\n");
 
                     // Check if the image already exists in the media library
                     // Check if the image already exists in the media library
                     $query_images_args = array(
                         'post_type' => 'attachment',
+                        'post_mime_type' => 'image',
                         'post_status' => 'inherit',
                         'posts_per_page' => -1,
-                        'meta_query' => array(
-                            array(
-                                'key' => '_wp_attachment_metadata',
-                                'value' => $image_url,
-                                'compare' => 'LIKE',
-                            ),
-                        ),
+                        'title' => $image_title, // replace this with the title of the image
                     );
 
                     $query_images = new WP_Query($query_images_args);
@@ -381,12 +374,7 @@ function fetch_rss_feed_and_post_to_blog()
                         echo_log("Image found in media library - using it \n");
                         $image_id = $query_images->posts[0]->ID;
                     } else {
-                        // The image does not exist in the media library, so upload it
-                        echo_log("Image not found in media library - uploading \n");
-                        $media = media_sideload_image($image_url, $post_id, $desc = "Test image", $return = 'id');
-                        if (!is_wp_error($media)) {
-                            $image_id = $media;
-                        }
+                        echo_log("ERROR: Image not found in media library! Check the title");
                     }
 
                     // Set the image as the post's featured image

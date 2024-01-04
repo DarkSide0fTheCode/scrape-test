@@ -1,0 +1,8 @@
+.list-item {
+    margin-bottom: 1em;
+    opacity: 0.5; /* Set initial opacity to 0.5 */
+    transition: opacity 0.5s ease; /* Add transition for smooth change */
+}
+.list-item.active {
+    opacity: 1; /* Set full opacity when active */
+}
