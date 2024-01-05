@@ -87,10 +87,10 @@ function malibutech_feed_callback()
         delete_all_articles();
     }
 
-     // Query all attachments
-     $query_images_args = array(
+    // Query all attachments
+    $query_images_args = array(
         'post_type' => 'attachment',
-        'post_mime_type' =>'image',
+        'post_mime_type' => 'image',
         'post_status' => 'inherit',
         'posts_per_page' => -1,
     );
@@ -259,6 +259,20 @@ function fetch_rss_feed_and_post_to_blog()
                     }
                 }
 
+                // Check if a post with the same title already exists
+                $existing_post_query = new WP_Query(
+                    array(
+                        'post_type' => 'post',
+                        'post_status' => 'publish',
+                        'title' => $post_title
+                    )
+                );
+
+                if ($existing_post_query->have_posts()) {
+                    // A post with the same title already exists, skip this item
+                    continue;
+                }
+
                 $articleContent = angiolino($post_link, $data['parserId']);
 
                 $articleContent .= '<p>Fonte: ' . $website_link . '</p';
@@ -278,10 +292,12 @@ function fetch_rss_feed_and_post_to_blog()
                 $post_id = wp_insert_post($new_post);
 
                 // Set the post as not commentable
-                wp_update_post(array(
-                    'ID' => $post_id,
-                    'comment_status' => 'closed',
-                ));
+                wp_update_post(
+                    array(
+                        'ID' => $post_id,
+                        'comment_status' => 'closed',
+                    )
+                );
 
                 echo_log("Analizing: " . $post_link . "\n");
                 echo_log("Post ID: " . $post_id . "\n");
