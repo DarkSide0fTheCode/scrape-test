@@ -152,7 +152,7 @@ function angiolino($url, $parserId)
 {
     // Prepare the URL for the GET request
     echo_log("Preparing to fetch: " . $url . "\n");
-    $request_url = 'http://87.17.176.223:3000/extract?url=' . urlencode($url);
+    $request_url = 'http://82.55.177.110:3000/extract?url=' . urlencode($url);
     echo_log("\n");
 
     // echo_log($request_url);
@@ -215,6 +215,14 @@ function fetch_rss_feed_and_post_to_blog()
             'post_author' => 2, // Set the author
 
         ),
+        'https://www.vivoscuola.it/itfeed/rss/tag/162' => array(
+            'image_title' => 'notizie-default',
+            'tags' => array('scuola secondaria', 'secondo grado'), // Add specific tags for this URL
+            'category' => "Scuola Secondaria",
+            'parserId' => '.col-lg-8',
+            'post_author' => 2, // Set the author
+
+        ),
     );
 
     // Loop through each RSS feed URL, its associated image URL, and tags
@@ -270,6 +278,7 @@ function fetch_rss_feed_and_post_to_blog()
 
                 if ($existing_post_query->have_posts()) {
                     // A post with the same title already exists, skip this item
+                    echo_log("Post with title " . $post_title . " already exists - skipping \n");
                     continue;
                 }
 
